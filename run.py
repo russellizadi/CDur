@@ -34,7 +34,6 @@ if torch.cuda.is_available(
     torch.backends.cudnn.deterministic = True
 DEVICE = torch.device(DEVICE)
 
-
 class Runner(object):
     """Main class to run experiments with e.g., train and evaluate"""
     def __init__(self, seed=42):
@@ -88,6 +87,9 @@ class Runner(object):
         logger.info("Running on device {}".format(DEVICE))
         labels_df = pd.read_csv(config_parameters['label'],
                                 sep='\s+').convert_dtypes()
+        
+        labels_df = labels_df[~labels_df['filename'].apply(lambda x: x.split("/")[-1].startswith("."))]
+        
         # In case of ave dataset where index is int, we change the
         # absolute name to relname
         if not np.all(labels_df['filename'].str.isnumeric()):
@@ -203,9 +205,10 @@ class Runner(object):
 
         utils.pprint_dict(optimizer, logger.info, formatter='pretty')
         utils.pprint_dict(model, logger.info, formatter='pretty')
-        if DEVICE.type != 'cpu' and torch.cuda.device_count() > 1:
-            logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
-            model = torch.nn.DataParallel(model)
+        # if DEVICE.type != 'cpu' and torch.cuda.device_count() > 1:
+        #     #n_device = 2 # torch.cuda.device_count()
+        #     logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
+        #     model = torch.nn.DataParallel(model)
         criterion = getattr(losses, config_parameters['loss'])().to(DEVICE)
 
         def _train_batch(_, batch):
@@ -218,6 +221,7 @@ class Runner(object):
                 loss.backward()
                 # Single loss
                 optimizer.step()
+                #print(model.alpha.item())
                 return loss.item()
 
         def _inference(_, batch):
@@ -331,7 +335,7 @@ class Runner(object):
             postprocessing='double',
             threshold=None,
             window_size=None,
-            save_seq=False,
+            save_seq=True,
             sed_eval=True,  # Do evaluation on sound event detection ( time stamps, segemtn/evaluation based)
             **kwargs):
         """evaluate
@@ -343,8 +347,8 @@ class Runner(object):
         :param **kwargs: Overwrite standard args, please pass `data` and `label`
         """
         # Update config parameters with new kwargs
-
-        config = torch.load(list(Path(f'{experiment_path}').glob("run_config*"))[0], map_location='cpu')
+        #config = torch.load(list(Path(f'{experiment_path}').glob("run_config*"))[0], map_location='cpu')
+        config = torch.load(glob.glob(f"{experiment_path}/run_config*")[0], map_location='cpu')
         # Use previous config, but update data such as kwargs
         config_parameters = dict(config, **kwargs)
         # Default columns to search for in data
@@ -555,7 +559,9 @@ class Runner(object):
                 experiment_path, tag_file.format(test_data_filename)),
                                    index=False,
                                    sep='\t')
-
+        print(strong_labels_df.shape)
+        print(pred_df.shape)
+        print(asdfa)
         if sed_eval:
             event_result, segment_result = metrics.compute_metrics(
                 strong_labels_df, pred_df, time_resolution=1.0)
@@ -629,15 +635,16 @@ class Runner(object):
         experiment_path = self.train(config, **kwargs)
         from h5py import File
         # Get the output time-ratio factor from the model
+        print(glob.glob("{}/run_model*".format(experiment_path))[0])
         model_parameters = torch.load(
             glob.glob("{}/run_model*".format(experiment_path))[0],
             map_location=lambda storage, loc: storage)
-        config_param = torch.load(glob.glob(
-            "{}/run_config*".format(experiment_path))[0],
-                                  map_location=lambda storage, loc: storage)
-        encoder = torch.load(glob.glob(
-            '{}/run_encoder*'.format(experiment_path))[0],
-                             map_location=lambda storage, loc: storage)
+        config_param = torch.load(
+            glob.glob("{}/run_config*".format(experiment_path))[0],
+            map_location=lambda storage, loc: storage)
+        encoder = torch.load(
+            glob.glob("{}/run_encoder*".format(experiment_path))[0],
+            map_location=lambda storage, loc: storage)
         # Dummy to calculate the pooling factor a bit dynamic
         with File(test_data, 'r') as store:
             timedim, datadim = next(iter(store.values())).shape
