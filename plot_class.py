@@ -5,15 +5,6 @@ import matplotlib.ticker as ticker
 import seaborn as sns 
 import matplotlib as mpl
 
-font_paths = mpl.font_manager.findSystemFonts()
-font_objects = mpl.font_manager.createFontList(font_paths)
-font_names = [f.name for f in font_objects]
-#print(font_names)
-#sns.set_style({'font.family':'serif', 'font.serif':['Times New Roman']})
-
-
-df = pd.read_excel("figs/class.xlsx", engine='openpyxl')
-
 sns.set_theme(style="whitegrid")
 sns.set_style({'font.family': 'Times New Roman'})
 SMALL_SIZE = 8
@@ -33,6 +24,8 @@ mpl.rcParams['xtick.major.pad'] = -2
 mpl.rcParams['ytick.major.pad'] = -2
 mpl.rcParams["text.color"] = "black"
 
+
+df = pd.read_excel("figs/class.xlsx", engine='openpyxl')
 w = 504 / 72. 
 h = (244+10) / 72.
 

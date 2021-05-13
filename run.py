@@ -29,10 +29,12 @@ import losses
 DEVICE = 'cpu'
 if torch.cuda.is_available(
         ):
-    DEVICE = 'cuda'
+    DEVICE = 'cuda:0'
     # Without results are slightly inconsistent
     torch.backends.cudnn.deterministic = True
 DEVICE = torch.device(DEVICE)
+print(DEVICE)
+available_gpus = [torch.cuda.device(i) for i in range(torch.cuda.device_count())]
 
 class Runner(object):
     """Main class to run experiments with e.g., train and evaluate"""
@@ -360,7 +362,6 @@ class Runner(object):
             '{}/run_encoder*'.format(experiment_path))[0],
                              map_location=lambda storage, loc: storage)
         strong_labels_df = pd.read_csv(config_parameters['label'], sep='\t')
-
         # Evaluation is done via the filenames, not full paths
         if not np.issubdtype(strong_labels_df['filename'].dtype, np.number):
             strong_labels_df['filename'] = strong_labels_df['filename'].apply(
@@ -401,8 +402,15 @@ class Runner(object):
         sequences_to_save = []
         mAP_pred, mAP_tar = [], []
         with torch.no_grad():
-            for batch in tqdm(dataloader, unit='file', leave=False):
+            for i_batch, batch in enumerate(tqdm(dataloader, unit='file', leave=False)):
                 _, target, filenames = batch
+                # if i_batch >= 10:
+                #     print(asdf)
+                # print(i_batch, target.shape, filenames, batch[0].shape)
+                # np.savez(f"figs/spc-{i_batch}.npz", 
+                #     spc=batch[0][0].cpu().numpy(),
+                #     filename=filenames[0])
+                
                 clip_pred, pred, _ = self._forward(model, batch)
                 clip_pred = clip_pred.cpu().detach().numpy()
                 mAP_tar.append(target.numpy().squeeze(0))
@@ -559,9 +567,8 @@ class Runner(object):
                 experiment_path, tag_file.format(test_data_filename)),
                                    index=False,
                                    sep='\t')
-        print(strong_labels_df.shape)
-        print(pred_df.shape)
-        print(asdfa)
+        # print(strong_labels_df.shape)
+        # print(pred_df.shape)
         if sed_eval:
             event_result, segment_result = metrics.compute_metrics(
                 strong_labels_df, pred_df, time_resolution=1.0)

@@ -181,13 +181,13 @@ def train_labelencoder(labels: pd.Series, sparse=True):
     returns encoded labels (many hot) and the encoder
     """
     assert isinstance(labels, pd.Series), "Labels need to be series"
-    if isinstance(labels[0], six.string_types):
+    if isinstance(labels.iloc[0], six.string_types):
         # In case of using non processed strings, e.g., Vaccum, Speech
         label_array = labels.str.split(',').values.tolist()
-    elif isinstance(labels[0], np.ndarray):
+    elif isinstance(labels.iloc[0], np.ndarray):
         # Encoder does not like to see numpy array
         label_array = [lab.tolist() for lab in labels]
-    elif isinstance(labels[0], collections.Iterable):
+    elif isinstance(labels.iloc[0], collections.Iterable):
         label_array = labels
     encoder = pre.MultiLabelBinarizer(sparse_output=sparse)
     encoder.fit(label_array)

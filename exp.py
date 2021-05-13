@@ -5,11 +5,11 @@ import os
 import yaml
 import itertools
 
-config_file = "runconfigs/cdur_urban_sed1.yaml"
+config_file = "runconfigs/cdur_urban_sed_amn.yaml"
 
 for rnn, temppool in itertools.product(
     ["GRU", ], # ["GRU", "RNN", "LSTM"] 
-    ["linear", ], # ["max", "linear", "attention"]
+    ["max", ], # ["max", "linear", "attention"]
     ): 
     with open(config_file) as con_read:
         yaml_config = yaml.load(con_read, Loader=yaml.FullLoader)

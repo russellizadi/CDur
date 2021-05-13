@@ -398,7 +398,7 @@ class Shape(nn.Module):
         return x
 
 
-class Block2D2(nn.Module):
+class AM(nn.Module):
     def __init__(self, cin, cout, kernel_size=3, padding=1):
         super().__init__()
         self.r = nn.BatchNorm2d(cin)
@@ -408,144 +408,41 @@ class Block2D2(nn.Module):
             padding=padding,
             bias=False)
         self.s = nn.LeakyReLU(inplace=True, negative_slope=0.1)
-        #self.ud = nn.Linear(cin, int(cin/8))
         self.uu = nn.Linear(cin, 10)
-        #self.pool = SoftPool()
-        #self.pool = LinearSoftPool()
 
-
-    def forward(self, x):
+    def forward(self, x, mix=True):
         # [64, 128, 250, 16]
         # [64, 128, 125, 4]
-        #print(x.shape)
         
         uu = self.uu(x.transpose(1, 3)).transpose(1, 3) # [64, 10, 250, 16], [64, 10, 125, 4]
         dist = torch.cdist(uu, uu)
         
-
         # 1. au = torch.softmax(-dist**2/float(uu.shape[-1]**.5), -1) # [64, 10, 250, 250]
         # 2. conv1 64 
         au = torch.softmax(-dist**2/float(uu.shape[-1]**.5), -1) # [64, 10, 250, 250]
-        ad = au.mean(1, keepdims=True).repeat(1, 128, 1, 1)
-        
-        #ud = self.ud(x.transpose(1, 3))#.transpose(1, 3) # [64, 16, 250, 16], [64, 16, 125, 4]
-        #ad = torch.softmax(-torch.cdist(ud, ud)**2, -1).repeat(1, 8, 1, 1) # [64, 128, 250, 250]
         
         x = self.r(x)
         x = self.w(x)
         x = self.s(x)
-        x = torch.matmul(ad, x)
+        if mix:
+            ad = au.mean(1, keepdims=True).repeat(1, x.shape[1], 1, 1)
+            x = torch.matmul(ad, x)
         return x, au
 
 
-class AP(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        
-        a = torch.softmax(-torch.cdist(x, x)**2, -1)# / float(x.shape[-1]**.5)) #, -1)
-        #a = (a > .5).float()
-        #a = a / a.sum(-1, keepdim=True)
-        x = torch.matmul(a, x)#.transpose(1, 3)
-        return x
-
-
-class MHA(nn.Module):
-    def __init__(self, cin, cout, d1, d2, kernel_size=3, padding=1):
-        super().__init__()
-        #self.f = nn.MultiheadAttention(d, n)
-        # self.key = nn.Sequential(
-        #     #nn.BatchNorm2d(cin),
-        #     nn.Conv2d(
-        #         cin,
-        #         cout,
-        #         kernel_size=kernel_size,
-        #         padding=padding,
-        #         bias=False), 
-        #     nn.LPPool2d(d1, d2))
-        
-        self.val = nn.Sequential(
-            nn.BatchNorm2d(cin),
-            nn.Conv2d(
-                cin,
-                cout,
-                kernel_size=kernel_size,
-                padding=padding,
-                bias=False), 
-            nn.LPPool2d(d1, d2))
-        self.nl = nn.LeakyReLU(inplace=True, negative_slope=0.1)
-
-    def forward(self, x):
-        b, c, l, d = x.shape
-        #print(x.shape)
-        #k = self.key(x)
-        
-        #print(k.shape)
-        
-        v = self.val(x)
-        v = self.nl(v)
-        dim = float(v.shape[-1])
-        s = torch.einsum('abcd, abde -> abce', v, v.transpose(2, 3))
-        s = torch.softmax(s / (dim ** .5), -1)
-        y = torch.einsum('abcd, abde -> abce', s, v)
-        
-        # print(y.shape)
-        # print(asdf)
-        # x = x.transpose(1, 2).reshape(b, l, -1).transpose(0, 1)
-        # y, w = self.f(x, x, x)
-        # #print(y.shape)
-        # y = y.transpose(0, 1).reshape(b, l, c, d).transpose(1, 2)
-        # #y = y[None, :]
-        return y
-
-
-class CDur1(nn.Module):
+class AMN(nn.Module):
     def __init__(self, inputdim, outputdim, **kwargs):
         super().__init__()
         self.b1 = Block2D(1, 64)
         self.p1 = nn.LPPool2d(4, (2, 4))
         self.b21 = Block2D(64, 128)
-        self.b22 = Block2D2(128, 128)
+        self.b22 = AM(128, 128)
         self.p2 = nn.LPPool2d(4, (2, 4))
         self.b31 = Block2D(128, 128)
-        self.b32 = Block2D2(128, 128)
+        self.b32 = AM(128, 128)
         self.p3 = nn.LPPool2d(4, (1, 4))
         self.d3 = nn.Dropout(0.3)
-
-        # self.features = nn.Sequential(
-        #     #Shape(), 
-        #     #AP(), 
-        #     #MHA(1, 32, 4, (2, 4)),
-        #     Block2D(1, 32),
-        #     #Shape(), 
-        #     nn.LPPool2d(4, (2, 4)),
-        #     #Shape(), 
-        #     #AP(),
-        #     #MHA(32*16, 16),
-        #     #Shape(),
-        #     Block2D(32, 128), 
-        #     Block2D2(128, 128),
-        #     nn.LPPool2d(4, (2, 4)),
-        #     #Shape(), 
-            
-        #     #MHA(128*4, 4),
-        #     Block2D(128, 128),
-        #     #AP(), 
-        #     Block2D2(128, 128),
-        #     #AP(),
-        #     nn.LPPool2d(4, (1, 4)),
-        #     nn.Dropout(0.3),
-        #     #Shape()
-        #     #MHA(128, 8),
-        #     #AP(),
-        # )
-        # with torch.no_grad():
-        #     rnn_input_dim = self.features(torch.randn(1, 1, 501,
-        #                                               inputdim)).shape
-        #     rnn_input_dim = rnn_input_dim[1] * rnn_input_dim[-1]
         rnn_input_dim = 128
-        #self.features.apply(init_weights)
 
         self.gru = getattr(nn, kwargs.get('rnn', 'GRU'))(
             rnn_input_dim,
@@ -569,40 +466,32 @@ class CDur1(nn.Module):
         x = self.b1(x) 
         x = self.p1(x)
         x = self.b21(x) 
-        x, au2 = self.b22(x)
+        x, au2 = self.b22(x, mix=True)
         x = self.p2(x)
         x = self.b31(x)
-        x, au3 = self.b32(x)
+        x, au3 = self.b32(x, mix=True)
         x = self.p3(x)
         x = self.d3(x)
         x = x.transpose(1, 2).contiguous().flatten(-2) # [64, 125, 128]
-        #x = self.ap(x)
         self.gru.flatten_parameters()
         x, _ = self.gru(x) # [64, 125, 256]
-        #decision_time = torch.sigmoid(self.outputlayer(x)).clamp(1e-7, 1.) # [64, 125, 10]
         decision_time = torch.sigmoid(
             self.outputlayer(x.transpose(1, 2))).transpose(1, 2)#.clamp(1e-7, 1.) # [64, 125, 10]
         
-        #u = decision_time
-        #print(decision_time.shape)
         decision_time = torch.matmul(au3, decision_time.transpose(1, 2).unsqueeze(3)).squeeze(3).transpose(1, 2)
-        #print(decision_time.shape)
         if upsample:
             decision_time = torch.nn.functional.interpolate(
                 decision_time.transpose(1, 2),
                 time//2,
                 mode='linear',
                 align_corners=False).transpose(1, 2) # [64, 250, 10]
-        #print(decision_time.shape)
         decision_time = torch.matmul(au2, decision_time.transpose(1, 2).unsqueeze(3)).squeeze(3).transpose(1, 2)
-        #print(decision_time.shape)
-
+        
         if upsample:
             decision_time = torch.nn.functional.interpolate(
                 decision_time.transpose(1, 2),
                 time,
                 mode='linear',
                 align_corners=False).transpose(1, 2) # [64, 501, 10]
-        #print(decision_time.shape)
         decision = self.temp_pool(x, decision_time).clamp(1e-7, 1.).squeeze(1) # [64, 10]
         return decision, decision_time
